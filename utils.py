@@ -18,6 +18,38 @@ gdal.UseExceptions()
 
 
 
+
+def retrieve_field(k, url0, roi, urlcloud=None, cld_thresh=20):
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if roi.find("http://") >= 0:
+            prefix = "/vsicurl/"
+        else:
+            prefix = ""
+        if urlcloud is not None:
+            g = gdal.Open(f"/vsicurl/{url0:s}")
+            height = g.RasterYSize
+            width=g.RasterXSize
+            g = gdal.Warp("", f"/vsicurl/{urlcloud:s}", format="MEM",
+                          height=height, width=width,
+                          cutlineDSName=f"{prefix:s}{roi}",
+                          cropToCutline=True)
+            cld = g.ReadAsArray()
+            if np.sum(cld < cld_threshold) == 0:
+                # No clear pixels
+                return k, None
+
+        g = gdal.Warp("", f"/vsicurl/{url0:s}", format="MEM",
+                        cutlineDSName=f"{prefix:s}{roi}",
+                        cropToCutline=True)
+        data1 = g.ReadAsArray()*1.
+        data1[data1 < -9990] = np.nan
+        data1[cld > cld_thresh] = np.nan
+        if np.isnan(np.nanmean(data1)):
+            return k, None
+        return k, data1
+
+
 def calculate_index(k, url0, url1, urlcloud, roi, cld_thresh):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -25,6 +57,18 @@ def calculate_index(k, url0, url1, urlcloud, roi, cld_thresh):
             prefix = "/vsicurl/"
         else:
             prefix = ""
+        g = gdal.Open(f"/vsicurl/{url0:s}")
+        height = g.RasterYSize
+        width=g.RasterXSize
+        g = gdal.Warp("", f"/vsicurl/{urlcloud:s}", format="MEM",
+                      height=height, width=width,
+                      cutlineDSName=f"{prefix:s}{roi}",
+                      cropToCutline=True)
+        cld = g.ReadAsArray()
+        if np.sum(cld > cld_threshold) == 0:
+            # No clear pixels
+            return k, None
+
         g = gdal.Warp("", f"/vsicurl/{url0:s}", format="MEM",
                         cutlineDSName=f"{prefix:s}{roi}",
                         cropToCutline=True)
@@ -32,14 +76,6 @@ def calculate_index(k, url0, url1, urlcloud, roi, cld_thresh):
         g = gdal.Warp("", f"/vsicurl/{url1:s}", format="MEM",
                         cutlineDSName=f"{prefix:s}{roi}",
                         cropToCutline=True)
-        data2 = g.ReadAsArray()*1.
-        height=g.RasterYSize
-        width=g.RasterXSize
-        g = gdal.Warp("", f"/vsicurl/{urlcloud:s}", format="MEM",
-                      height=height, width=width,
-                      cutlineDSName=f"{prefix:s}{roi}",
-                      cropToCutline=True)
-        cld = g.ReadAsArray()
         data1[data1 < -9990] = np.nan
         data2[data2 < -9990] = np.nan
         data1[cld > cld_thresh] = np.nan
@@ -58,7 +94,7 @@ def extract_roi_data_ndre(img_db, roi=None, b0=3, b1=6, cld_thresh=20):
         futures = []
         for k in img_db.keys():
             futures.append(ex.submit(calculate_index, k, img_db[k][b0],
-                            img_db[k][b1], img_db[k][-1], 
+                            img_db[k][b1], img_db[k][-1],
                             roi, cld_thresh))
         kwargs = {
             'total': len(futures),

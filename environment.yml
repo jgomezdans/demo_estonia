@@ -1,0 +1,16 @@
+name: geog0133_env
+
+dependencies:
+    - python>=3.6
+    - jupyter
+    - tornado<6
+    - gdal>=2.3.0
+    - tqdm
+    - libgdal>=2.3.0
+    - numpy
+    - scipy
+    - matplotlib
+    - ipywidgets
+    - pandas
+    - jupyter_contrib_nbextensions
+    - widgetsnbextension
